@@ -24,8 +24,9 @@
 #
 # Changes:
 #    v0.0.1, 22 Jan 2025, Initial release
+#    v0.0.2, 23 Jan 2025, Logging issue fixed
 
-# * External dependencies: basename, dirname, printf, pwd, tput
+# * External dependencies: basename, dirname, tput
 # * Environment variables:
 #   - LOG_VERBOSITY: Set to 0=err, 1=wrn, 2=inf, 3=dbg
 #   - NO_COLOR: Set to any value to disable colors
@@ -46,7 +47,7 @@ script_name=$(basename "${BASH_SOURCE[0]}")
 script_orig_cwd="${PWD}"
 script_params="$*"                         # the IFS expansion of all positional parameters, $1 $2 $3 ...
 script_verbosity="${LOG_VERBOSITY:-2}"     # 0=err, 1=wrn, 2=inf, 3=dbg
-script_version="0.0.1"
+script_version="0.0.2"
 script_log_lvl=()
 
 # Set up colors by default. Users that prefer to have plain, non-colored text
@@ -84,7 +85,7 @@ function __log() {
   shift
   if [ "${script_verbosity}" -ge "${lvl}" ]; then
     printf '%(%Y-%m-%d %H:%M:%S)T %-5s %s %b\n' -1 "${script_log_lvl[${lvl}]}" \
-      "${script_name}:${BASH_LINENO[1]}" "$*"
+      "${BASH_SOURCE[2]##*/}:${BASH_LINENO[1]}" "$*"
   fi
 }
 
@@ -98,6 +99,8 @@ function log_dbg() { __log "3" "${@}"; }
 
 function parse_params() {
 
+  log_dbg "Parsing command line parameters: [${script_params}]"
+
   # Uncomment if script has mandatory options or arguments
   # [[ $# -eq 0 ]] && script_usage
 
@@ -106,12 +109,13 @@ function parse_params() {
 
   # Long options can be parsed by the standard getopts builtin as "arguments"
   # to the - "option". Source: http://stackoverflow.com/a/28466267/7666
-  while getopts hv:-: opt; do # allow -a, -b with arg, -c, and -- "with arg"
-    if [ "$opt" = "-" ]; then   # long option: reformulate opt and OPTARG
-      opt="${OPTARG%%=*}"       # extract long option name
-      OPTARG="${OPTARG#"$opt"}" # extract long option argument (may be empty)
-      OPTARG="${OPTARG#=}"      # if long option argument, remove assigning `=`
+  while getopts hv:-: opt; do     # allow -a, -b with arg, -c, and -- "with arg"
+    if [ "${opt}" = "-" ]; then   # long option: reformulate opt and OPTARG
+      opt="${OPTARG%%=*}"         # extract long option name
+      OPTARG="${OPTARG#"${opt}"}" # extract long option argument (may be empty)
+      OPTARG="${OPTARG#=}"        # if long option argument, remove assigning `=`
     fi
+    log_dbg "Option: [${opt}], Option Argument: [${OPTARG:-}]"
     case "${opt}" in
       h | help      ) script_usage ;;
           version   ) echo "v${script_version}"; exit 0 ;;
@@ -136,10 +140,6 @@ function parse_params() {
       exit 2
     fi
   fi
-
-  log_dbg "### SCRIPT STARTED ###"
-  log_dbg "Script name/version = ${script_name} v${script_version}"
-  log_dbg "Script params       = [${script_params}]"
 }
 
 function script_trap_exit() {
@@ -186,6 +186,9 @@ EOF
 function main() {
   trap 'script_trap_err "${?}"' ERR
   trap 'script_trap_exit "${?}"' EXIT
+
+  log_dbg "### SCRIPT STARTED ###"
+  log_dbg "Script name/version = ${script_name} v${script_version}"
 
   parse_params "${@}"
 }
